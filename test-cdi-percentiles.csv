@@ -11,3 +11,5 @@ id,form,sex,age,sumscore
 10,eng_wg_comp,m,16,50
 11,eng_wg_comp,f,16,100
 12,eng_wg_comp,f,18,100
+13,eng_wg_comp,both,18,100
+14,eng_ws_prod,both,18,100
