@@ -14,6 +14,8 @@ ui <- fluidPage(
   titlePanel("CDI Percentile Score Calculator"),
   sidebarLayout(
     sidebarPanel(
+      h3("Single Child Lookup"),
+      p(HTML("To get norms-based percentile for a single child, choose the age (in months), sex (if sex-based norms desired), and form type.")),
       selectInput("form_type", "Form Type", 
                   choices = c("eng_ws_prod", "eng_wg_prod", "eng_wg_comp")),
       numericInput("child_age", "Age of Child", value = 20, min = 12, max = 30),
@@ -26,15 +28,20 @@ ui <- fluidPage(
       verbatimTextOutput("error_message")
     ),
     mainPanel(
+      h3("Bulk Lookup"),
+      p(HTML("This tool is meant to help researchers look up percentiles for English CDI:WS / CDI:WG scores based on the 2022 American English norms. (It is only valid for the forms' intended age ranges, and for children from the United States.)")),
+      p(HTML("Upload a CSV with 1 row per child. Columns must include: age, sex, form, and sumscore. Allowable values:")),
+      p(HTML("<b>age</b>: (in months) valid range for Words & Gestures form: 8-18; valid range for Words & Sentences form: 16-30.")),
+      p(HTML("<b>sex</b>: 'm' (male) or 'f' (female)")),
+      p(HTML("<b>form</b>: must be one of ['eng_ws_prod','eng_wg_prod','eng_wg_comp'] (eng=English; prod=production; comp=comprehension")),
+      p(HTML("<b>sumscore</b>: total words known (produced / understood; see <b>form</b>); should be 0-396 for WG forms, and 0-680 for WS")),
       fileInput("file_input", "Upload CSV File", 
                 accept = c(".csv")),
       tableOutput("uploaded_data"),
-      uiOutput("download_button"),
-      #plotOutput("percentile_plot")
+      uiOutput("download_button")
     )
   )
 )
-
 
 # Core function that looks up the percentile for a given table, the child's age, and the child's score
 get_percentile <- function(lookup_table_mat, child_age, child_score) {
@@ -92,8 +99,8 @@ get_percentile_for_child <- function(form_type, child_age,
 server <- function(input, output, session) {
   
   uploaded_data <- reactive({
-    req(input$dataset)
-    inFile <- input$dataset
+    req(input$file_input)
+    inFile <- input$file_input
     
     if(is.null(inFile)) return(NULL)
     
@@ -103,10 +110,10 @@ server <- function(input, output, session) {
       need("id" %in% names(raw_dat), "Need 'id' column in uploaded CSV."),
       need("form" %in% names(raw_dat), "Error: Need 'AWC' or 'AWC_COUNT' in uploaded CSV."),
       need("sex" %in% names(raw_dat) , "Error: Need 'CTC' or 'CT_COUNT' in uploaded CSV."),
-      need("age" %in% names(raw_dat) & is.numeric(age), "Error: Need 'age' (numeric age in months in range of 12-30) in uploaded CSV."),
-      need("sumscore" %in% names(raw_dat) & is.numeric(sumscore), "Error: Need 'sumscore' (numeric, total words known on CDI) in uploaded CSV.")
+      need("age" %in% names(raw_dat) & is.numeric(raw_dat$age), "Error: Need 'age' (numeric age in months in range of 12-30) in uploaded CSV."),
+      need("sumscore" %in% names(raw_dat) & is.numeric(raw_dat$sumscore), "Error: Need 'sumscore' (numeric, total words known on CDI) in uploaded CSV.")
     )
-  
+    
     dat <- raw_dat %>% select(all_of(required_columns)) 
   })
   
@@ -142,35 +149,17 @@ server <- function(input, output, session) {
   
   
   output$download_button <- renderUI({
-    req(input$dataset, processed_data())
+    req(input$file_input, processed_data())
     downloadButton("download_data", "Download Data", class = "btn-xs")
   })
-
+  
   output$download_data <- downloadHandler(
     filename = function() "processed_data.csv", 
-    content <- function(fname) {
+    content = function(fname) {
       write.csv(processed_data(),
                 fname, row.names = FALSE)
     }
   )
-  
-  output$percentile_plot <- renderPlot({
-    data <- percentile_data()
-    
-    # Melt data for plotting
-    data_long <- data %>%
-      pivot_longer(cols = -1, names_to = "Age", values_to = "Score") %>%
-      mutate(Age = as.numeric(Age),
-             Percentile = as.numeric(row.names(data)))
-    
-    ggplot(data_long, aes(x = Score, y = Percentile, color = as.factor(Age))) +
-      geom_line() +
-      labs(title = "Percentile Scores by Age",
-           x = "CDI Score",
-           y = "Percentile",
-           color = "Age") +
-      theme_minimal()
-  })
 }
 
 shinyApp(ui = ui, server = server)
