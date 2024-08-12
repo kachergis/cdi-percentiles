@@ -2,13 +2,21 @@ library(shiny)
 library(here)
 library(tidyverse)
 
+# created in load_norms_tables.R
+norms_tables <- readRDS("cdi_benchmarks/norms_tables.rds")
+
+required_columns <- c('id', 'form', 'sex', 'age', 'sumscore')
+
+valid_wg_ages = 12:18
+valid_ws_ages = 16:30
+
 ui <- fluidPage(
   titlePanel("CDI Percentile Score Calculator"),
   sidebarLayout(
     sidebarPanel(
       selectInput("form_type", "Form Type", 
                   choices = c("eng_ws_prod", "eng_wg_prod", "eng_wg_comp")),
-      numericInput("child_age", "Age of Child", value = 20, min = 16, max = 30),
+      numericInput("child_age", "Age of Child", value = 20, min = 12, max = 30),
       selectInput("child_sex", "Sex of Child", 
                   choices = c("Male" = "m", "Female" = "f", "All" = NA)),
       numericInput("child_score", "CDI Summary Score", value = 151, min = 0),
@@ -20,22 +28,13 @@ ui <- fluidPage(
     mainPanel(
       fileInput("file_input", "Upload CSV File", 
                 accept = c(".csv")),
-      downloadButton("download_data", "Download Processed Data"),
       tableOutput("uploaded_data"),
-      plotOutput("percentile_plot")
+      uiOutput("download_button"),
+      #plotOutput("percentile_plot")
     )
   )
 )
 
-
-read_percentile_table <- function(file_name) {
-  as.matrix(read_csv(here("cdi_benchmarks", file_name), skip = 1))
-}
-
-# Generate list of matrices for each available benchmark file
-available_benchmarks <- list.files(here("cdi_benchmarks"))
-available_benchmarks_matrix <- lapply(available_benchmarks, read_percentile_table)
-names(available_benchmarks_matrix) <- available_benchmarks
 
 # Core function that looks up the percentile for a given table, the child's age, and the child's score
 get_percentile <- function(lookup_table_mat, child_age, child_score) {
@@ -75,7 +74,7 @@ get_percentile <- function(lookup_table_mat, child_age, child_score) {
 get_percentile_for_child <- function(form_type, child_age, 
                                      child_score, 
                                      child_sex = NA,
-                                     percentile_matrix = available_benchmarks_matrix) {
+                                     percentile_matrix = norms_tables) {
   if (is.na(child_sex)) {
     child_sex = "both"
   }
@@ -91,6 +90,26 @@ get_percentile_for_child <- function(form_type, child_age,
 }
 
 server <- function(input, output, session) {
+  
+  uploaded_data <- reactive({
+    req(input$dataset)
+    inFile <- input$dataset
+    
+    if(is.null(inFile)) return(NULL)
+    
+    raw_dat <- read.csv(inFile$datapath, header = T, sep=',')
+    
+    validate(
+      need("id" %in% names(raw_dat), "Need 'id' column in uploaded CSV."),
+      need("form" %in% names(raw_dat), "Error: Need 'AWC' or 'AWC_COUNT' in uploaded CSV."),
+      need("sex" %in% names(raw_dat) , "Error: Need 'CTC' or 'CT_COUNT' in uploaded CSV."),
+      need("age" %in% names(raw_dat) & is.numeric(age), "Error: Need 'age' (numeric age in months in range of 12-30) in uploaded CSV."),
+      need("sumscore" %in% names(raw_dat) & is.numeric(sumscore), "Error: Need 'sumscore' (numeric, total words known on CDI) in uploaded CSV.")
+    )
+  
+    dat <- raw_dat %>% select(all_of(required_columns)) 
+  })
+  
   output$percentile_result <- renderPrint({
     input$calculate
     isolate({
@@ -103,19 +122,14 @@ server <- function(input, output, session) {
     })
   })
   
-  uploaded_data <- reactive({
-    req(input$file_input)
-    read_csv(input$file_input$datapath)
-  })
-  
   processed_data <- reactive({
     req(uploaded_data())
     data <- uploaded_data()
     
     data$percentile <- mapply(get_percentile_for_child, 
-                              data$form_type, 
+                              data$form, 
                               data$age, 
-                              data$score, 
+                              data$sumscore, 
                               data$sex)
     
     data
@@ -126,12 +140,17 @@ server <- function(input, output, session) {
     processed_data()
   })
   
+  
+  output$download_button <- renderUI({
+    req(input$dataset, processed_data())
+    downloadButton("download_data", "Download Data", class = "btn-xs")
+  })
+
   output$download_data <- downloadHandler(
-    filename = function() {
-      paste("processed_data", Sys.Date(), ".csv", sep = "")
-    },
-    content = function(file) {
-      write_csv(processed_data(), file)
+    filename = function() "processed_data.csv", 
+    content <- function(fname) {
+      write.csv(processed_data(),
+                fname, row.names = FALSE)
     }
   )
   
@@ -147,7 +166,7 @@ server <- function(input, output, session) {
     ggplot(data_long, aes(x = Score, y = Percentile, color = as.factor(Age))) +
       geom_line() +
       labs(title = "Percentile Scores by Age",
-           x = "CDI Summary Score",
+           x = "CDI Score",
            y = "Percentile",
            color = "Age") +
       theme_minimal()

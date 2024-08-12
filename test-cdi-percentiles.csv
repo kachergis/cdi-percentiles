@@ -1,0 +1,13 @@
+id,form,sex,age,sumscore
+1,eng_ws_prod,f,20,50
+2,eng_ws_prod,f,24,100
+3,eng_ws_prod,m,20,50
+4,eng_ws_prod,m,24,100
+5,eng_ws_prod,m,30,200
+6,eng_wg_prod,f,20,50
+7,eng_wg_prod,f,24,100
+8,eng_wg_prod,m,18,200
+9,eng_wg_comp,m,12,10
+10,eng_wg_comp,m,16,50
+11,eng_wg_comp,f,16,100
+12,eng_wg_comp,f,18,100
