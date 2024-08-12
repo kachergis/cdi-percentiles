@@ -1,0 +1,2 @@
+Shiny app to give percentile scores for the English [MB-CDI](https://mb-cdi.stanford.edu/) Words & Sentences and Words & Gestures forms, based on the 2022 norms (ToDO: add citation).
+This app is created by George Kachergis, based on a script created by Jess Mankewitz with advice from Virginia Marchman.
